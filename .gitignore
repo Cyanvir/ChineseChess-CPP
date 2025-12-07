@@ -1,0 +1,14 @@
+# 忽略 Visual Studio 的临时垃圾
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.pdb
+*.obj
+*.idb
+*.tlog
+*.log
+
+# 忽略生成的可执行文件，但保留库文件
+*.exe
