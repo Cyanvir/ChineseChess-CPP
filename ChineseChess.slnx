@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="ChineseChess/ChineseChess.vcxproj" />
+  <Project Path="ChineseChess/ChineseChess.vcxproj" Id="c6d6e95b-a158-4222-a5cb-33cab790dd3a" />
 </Solution>
