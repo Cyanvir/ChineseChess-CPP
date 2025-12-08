@@ -1,8 +1,6 @@
 #include <graphics.h>
-#include <conio.h>
-#include "ChessBoard.h" // 引用我们要用的棋盘类
+#include "ChessBoard.h"
 
-// 链接库配置（和你之前的一样）
 #ifdef _WIN64
 #pragma comment(lib, "EasyXa.lib")
 #pragma comment(lib, "EasyXw.lib")
@@ -13,21 +11,38 @@
 
 int main()
 {
-	// 1. 创建图形窗口
-	// 计算一下窗口大小：棋盘宽(8格) + 左右留白(2*50)，高(9格) + 上下留白
-	// 这里直接给一个稍大一点的固定值
-	initgraph(580, 700, EX_SHOWCONSOLE);
+	// 初始化窗口
+	initgraph(580, 700, EX_SHOWCONSOLE); // 这里保留控制台方便调试
 
-	// 2. 实例化一个棋盘对象
 	ChessBoard board;
+	board.init();
 
-	// 3. 绘制棋盘
-	board.draw();
+	// 开始绘制循环
+	// 每次循环：处理输入 -> 更新数据 -> 绘制画面
+	BeginBatchDraw(); // 开启双缓冲，防止画面闪烁（很重要！）
 
-	// 4. 暂停，等待用户按键
-	_getch();
+	while (true) {
+		// 1. 处理鼠标交互
+		MOUSEMSG msg;
+		if (MouseHit()) { // 如果有鼠标消息
+			msg = GetMouseMsg();
+			if (msg.uMsg == WM_LBUTTONDOWN) { //如果是左键按下
+				// 把坐标传给棋盘去处理
+				board.click(msg.x, msg.y);
+			}
+		}
 
-	// 5. 关闭
+		// 2. 绘制
+		board.draw();
+
+		// 3. 显示
+		FlushBatchDraw();
+
+		// 稍微延时一下，降低CPU占用
+		Sleep(10);
+	}
+
+	EndBatchDraw();
 	closegraph();
 	return 0;
 }

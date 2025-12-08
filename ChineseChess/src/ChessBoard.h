@@ -1,30 +1,36 @@
 #pragma once
-#pragma once // 防止头文件被重复引用
-#include <graphics.h> // 引用图形库
+#include <graphics.h>
+#include "ChessPiece.h" // 【关键】必须包含这个，才能认识 ChessPiece 类
 
-// 定义棋盘类
 class ChessBoard
 {
 public:
-	// 构造函数：类创建时自动调用
 	ChessBoard();
 
-	// 初始化棋盘数据
+	// 初始化棋子位置
 	void init();
 
-	// 核心功能：把棋盘画出来
+	// 画棋盘和棋子
 	void draw();
-
-	// 获取格子大小（后续棋子移动需要用到）
+	// 处理鼠标点击：传入鼠标的像素坐标(x,y)
+	void click(int x, int y);
+	// 提供给外部的接口
 	int getGridSize() const { return GRID_SIZE; }
-
-	// 获取左上角偏移量（后续计算坐标需要用到）
 	int getMarginX() const { return MARGIN_X; }
 	int getMarginY() const { return MARGIN_Y; }
 
 private:
-	// 棋盘绘制的参数（常量）
-	const int GRID_SIZE = 60; // 每个格子的像素大小
-	const int MARGIN_X = 50;  // 棋盘左边的留白宽度
-	const int MARGIN_Y = 50;  // 棋盘上边的留白高度
+	// 辅助函数：根据行列坐标找棋子ID
+	// 如果这个位置有棋子，返回ID(0-31)；如果没有，返回-1
+	int getPieceAt(int row, int col);
+	const int GRID_SIZE = 60;
+	const int MARGIN_X = 50;
+	const int MARGIN_Y = 50;
+
+	// 存储32个棋子
+	ChessPiece pieces[32];
+	// 当前选中的棋子ID
+	// -1 表示没选中任何棋子
+	// 0-31 表示选中了对应的棋子
+	int selectedId;
 };

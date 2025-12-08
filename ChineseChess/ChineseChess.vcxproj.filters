@@ -18,12 +18,18 @@
     <ClInclude Include="src\ChessBoard.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="src\ChessPiece.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ChessBoard.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ChessPiece.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
