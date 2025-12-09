@@ -1,6 +1,6 @@
 #include <graphics.h>
 #include "ChessBoard.h"
-
+#include <time.h>
 #ifdef _WIN64
 #pragma comment(lib, "EasyXa.lib")
 #pragma comment(lib, "EasyXw.lib")
@@ -11,6 +11,7 @@
 
 int main()
 {
+	srand((unsigned int)time(NULL)); // 设置随机种子
 	// 初始化窗口
 	initgraph(580, 700, EX_SHOWCONSOLE); // 这里保留控制台方便调试
 

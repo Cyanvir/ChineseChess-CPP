@@ -1,5 +1,6 @@
 #pragma once
 #include <graphics.h>
+#include <vector>
 #include "ChessPiece.h" // 【关键】必须包含这个，才能认识 ChessPiece 类
 
 class ChessBoard
@@ -14,6 +15,8 @@ public:
 	void draw();
 	// 处理鼠标点击：传入鼠标的像素坐标(x,y)
 	void click(int x, int y);
+	// 电脑走棋逻辑
+	void computerMove();
 	// 裁判函数
 	// 参数：moveId(移动棋子的ID), row/col(目标位置), killId(目标位置的棋子ID, -1表示空地)
 	bool canMove(int moveId, int killId, int row, int col);

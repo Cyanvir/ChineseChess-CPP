@@ -171,6 +171,8 @@ int ChessBoard::getPieceAt(int row, int col)
 }
 void ChessBoard::click(int x, int y)
 {
+	// 必须点“当前回合”颜色的棋子
+	if (isRedTurn == false) return; // 【新增】如果是电脑回合，直接无视鼠标点击
 	// 1. 像素坐标转网格坐标 (记得要把边距减掉)
 	// 比如点击了 (115, 115)，边距50，格子60
 	// (115-50)/60 = 1，说明点在了第1列
@@ -256,7 +258,19 @@ void ChessBoard::click(int x, int y)
 
 			// 【核心修复】交换回合
 			// 这行代码必须在 canMove 的 if 里面，但在 吃子/移动 的逻辑最后
-			isRedTurn = !isRedTurn;
+			// 红方走完了，接下来交给 AI
+			isRedTurn = false; // 切换标志，禁止鼠标操作
+			draw(); // 必须先重绘，让玩家看到红方走的那一步
+
+			// 稍微停顿一下，假装电脑在思考 (也能让交互更自然)
+			Sleep(500); // 0.5秒
+
+			// 呼叫电脑走棋
+			computerMove();
+			// 注意：computerMove 里面会自动把 isRedTurn 改回 true
+
+			// 再次重绘，显示电脑走的结果
+			draw();
 		}
 	}
 }
@@ -400,4 +414,99 @@ bool ChessBoard::canMove(int moveId, int killId, int row, int col)
 	}
 
 	return true; // 如果上面都没拦住，那就是合法移动
+}
+// 辅助结构体：记录一步棋的信息
+struct MoveStep {
+	int moveId; // 哪个棋子动
+	int killId; // 吃了谁（-1表示没吃）
+	int row;    // 去哪里（行）
+	int col;    // 去哪里（列）
+	int score;  // 这步棋多少分
+};
+
+void ChessBoard::computerMove()
+{
+	// 1. 找出所有合法的走法
+	std::vector<MoveStep> moves;
+
+	// 遍历黑方所有棋子 (ID 16-31)
+	for (int i = 16; i < 32; i++) {
+		if (pieces[i].isDead()) continue; // 死的不能动
+
+		// 尝试走到棋盘的每一个格子 (0-9行, 0-8列)
+		for (int row = 0; row <= 9; row++) {
+			for (int col = 0; col <= 8; col++) {
+				int killId = getPieceAt(row, col); // 目标位置有没有子
+
+				// 问裁判：我也能走这里吗？
+				if (canMove(i, killId, row, col)) {
+					// 如果能走，计算一下这步棋的价值
+					MoveStep step;
+					step.moveId = i;
+					step.killId = killId;
+					step.row = row;
+					step.col = col;
+					step.score = 0;
+
+					// --- 评分规则 (贪心算法) ---
+					if (killId != -1) {
+						// 只要能吃子，分就高！
+						// 还可以细化：吃车(ROOK)得100分，吃兵(SOLDIER)得10分...
+						// 这里简单处理：吃将最高，其他按类型给分
+						switch (pieces[killId].getType()) {
+						case KING: step.score = 10000; break; // 杀棋！
+						case ROOK: step.score = 50; break;
+						case HORSE: step.score = 30; break;
+						case CANNON: step.score = 30; break;
+						default: step.score = 10; break; // 吃兵、士、象
+						}
+					}
+					// 记录这步棋
+					moves.push_back(step);
+				}
+			}
+		}
+	}
+
+	// 2. 挑选最好的一步
+	if (moves.empty()) return; // 无路可走（其实应该判输，这里先不管）
+
+	// 找出分数最高的
+	int maxScore = -1;
+	// 可能会有多个分数一样的（比如好几个兵都能向前走），我们随机选一个，防止电脑太死板
+	std::vector<MoveStep> bestMoves;
+
+	for (const auto& step : moves) {
+		if (step.score > maxScore) {
+			maxScore = step.score;
+			bestMoves.clear();
+			bestMoves.push_back(step);
+		}
+		else if (step.score == maxScore) {
+			bestMoves.push_back(step);
+		}
+	}
+
+	// 3. 随机选一个最好的
+	// 需要引入随机种子，不然每次走的一样。在 main 函数开头加 srand(time(0))
+	int index = rand() % bestMoves.size();
+	MoveStep best = bestMoves[index];
+
+	// 4. 执行这步棋
+	if (best.killId != -1) {
+		// 如果吃到了老帅，游戏结束
+		if (pieces[best.killId].getType() == KING) {
+			pieces[best.killId].die();
+			pieces[best.moveId].setPosition(best.row, best.col);
+			draw();
+			MessageBox(GetHWnd(), _T("黑方获胜！电脑赢了！"), _T("GG"), MB_OK);
+			init(); // 重开
+			return;
+		}
+		pieces[best.killId].die();
+	}
+	pieces[best.moveId].setPosition(best.row, best.col);
+
+	// 5. 走完这一步，换回红方
+	isRedTurn = true;
 }
