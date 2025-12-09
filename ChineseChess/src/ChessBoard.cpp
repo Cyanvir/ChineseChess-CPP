@@ -1,6 +1,20 @@
 #include "ChessBoard.h"
 #include <cmath>
 #include<graphics.h>
+// 兵的价值表 (这是针对红兵的，越往上走分越高)
+// 0分表示家里，20分表示过河，50分表示逼近九宫格
+const int SOLDIER_TABLE[10][9] = {
+	{ 0,  0,  0,  0,  0,  0,  0,  0,  0}, // 0行 (对面底线)
+	{40, 60, 80, 80, 80, 80, 80, 60, 40}, // 1行 (九宫格顶) - 高分！
+	{20, 40, 60, 80, 80, 80, 60, 40, 20}, // 2行
+	{20, 20, 40, 40, 40, 40, 40, 20, 20}, // 3行 (卒林线)
+	{20, 20, 20, 20, 20, 20, 20, 20, 20}, // 4行 (河岸)
+	{ 0,  0,  0,  0,  0,  0,  0,  0,  0}, // 5行 (自己河岸)
+	{ 0,  0,  0,  0,  0,  0,  0,  0,  0}, // 6行
+	{ 0,  0,  0,  0,  0,  0,  0,  0,  0}, // 7行
+	{ 0,  0,  0,  0,  0,  0,  0,  0,  0}, // 8行
+	{ 0,  0,  0,  0,  0,  0,  0,  0,  0}, // 9行 (自己底线)
+};
 ChessBoard::ChessBoard()
 {
 	selectedId = -1; // 一开始什么都没选中
@@ -9,11 +23,19 @@ ChessBoard::ChessBoard()
 // 初始化32个棋子
 void ChessBoard::init()
 {
-	// 红方先行
-	isRedTurn = true;
-	selectedId = -1; // 顺便确保重置选中状态
-	// 【核心修改】全部换成 TEAM_RED 和 TEAM_BLACK
+	// 1. 弹窗询问玩家
+	int ret = MessageBox(GetHWnd(), _T("你想执红先行吗？\n(按'是'执红，按'否'执黑)"), _T("选择阵营"), MB_YESNO | MB_ICONQUESTION);
 
+	if (ret == IDYES) {
+		playerColor = TEAM_RED;
+	}
+	else {
+		playerColor = TEAM_BLACK;
+	}
+
+	// 2. 初始化所有变量
+	selectedId = -1;
+	isRedTurn = true; // 永远是红方先行
 	// --- 红方 (0-15) ---
 	pieces[0] = ChessPiece(0, TEAM_RED, ROOK, 9, 0);
 	pieces[1] = ChessPiece(1, TEAM_RED, HORSE, 9, 1);
@@ -53,6 +75,14 @@ void ChessBoard::init()
 	pieces[29] = ChessPiece(29, TEAM_BLACK, SOLDIER, 3, 4);
 	pieces[30] = ChessPiece(30, TEAM_BLACK, SOLDIER, 3, 6);
 	pieces[31] = ChessPiece(31, TEAM_BLACK, SOLDIER, 3, 8);
+	// 4. 【核心逻辑】如果玩家选了黑方，那电脑(红方)得先走一步！
+	if (playerColor == TEAM_BLACK) {
+		// 先画出来棋盘让玩家看一眼
+		draw();
+		Sleep(500);
+		// 电脑走红方第一步
+		computerMove();
+	}
 }
 void ChessBoard::draw()
 {
@@ -171,8 +201,10 @@ int ChessBoard::getPieceAt(int row, int col)
 }
 void ChessBoard::click(int x, int y)
 {
+	// 1. 如果当前不是玩家的回合，禁止操作（防止电脑思考时玩家乱点）
+	if (isRedTurn && playerColor == TEAM_BLACK) return;
+	if (!isRedTurn && playerColor == TEAM_RED) return;
 	// 必须点“当前回合”颜色的棋子
-	if (isRedTurn == false) return; // 【新增】如果是电脑回合，直接无视鼠标点击
 	// 1. 像素坐标转网格坐标 (记得要把边距减掉)
 	// 比如点击了 (115, 115)，边距50，格子60
 	// (115-50)/60 = 1，说明点在了第1列
@@ -185,7 +217,7 @@ void ChessBoard::click(int x, int y)
 
 	// 3. 看看刚才点的这个地方有没有棋子
 	int clickId = getPieceAt(row, col);
-
+	
 	// --- 状态机逻辑 ---
 
 	if (selectedId == -1) {
@@ -217,59 +249,32 @@ void ChessBoard::click(int x, int y)
 		// 3. 点敌人 或 点空地 -> 尝试移动
 		// 问裁判：能不能走？
 		if (canMove(selectedId, clickId, row, col)) {
-
-			// --- 执行逻辑 ---
 			if (clickId != -1) {
-				// 吃子逻辑
 				if (pieces[clickId].getType() == KING) {
-					// 如果吃的是老将，游戏结束
 					pieces[clickId].die();
 					pieces[selectedId].setPosition(row, col);
-					draw(); // 把这一步画出来
-					// 2. 准备弹窗内容
-					LPCTSTR msgContent;
-					if (isRedTurn) msgContent = _T("红方获胜！\n\n是否再来一局？");
-					else msgContent = _T("黑方获胜！\n\n是否再来一局？");
-					// 3. 弹出对话框 (MB_YESNO 会显示"是"和"否"两个按钮)
-					// ret 会接收用户的选择结果
-					int ret = MessageBox(GetHWnd(), msgContent, _T("游戏结束"), MB_YESNO | MB_ICONQUESTION);
+					draw();
+					// 胜负判断
+					if (isRedTurn) MessageBox(GetHWnd(), _T("红方获胜！"), _T("恭喜"), MB_YESNO);
+					else MessageBox(GetHWnd(), _T("黑方获胜！"), _T("恭喜"), MB_YESNO);
 
-					// 4. 根据选择处理
-					if (ret == IDYES) {
-						// 用户点了“是” -> 重置游戏
-						init();
-						// selectedId = -1; // init()里已经重置了，这里不需要重复
-						// isRedTurn = true; // init()里也重置了
-					}
-					else {
-						// 用户点了“否” -> 退出程序
-						exit(0);
-					}
-					return; // 结束本次点击逻辑
+					// 这里为了简化，直接重开，你可以加 MB_YESNO 的判断逻辑
+					init();
+					return;
 				}
-				pieces[clickId].die(); // 普通吃子
+				pieces[clickId].die();
 			}
 
-			// 移动棋子 (不管是吃子还是走空地，自己都要过去)
 			pieces[selectedId].setPosition(row, col);
-
-			// 取消选中
 			selectedId = -1;
 
-			// 【核心修复】交换回合
-			// 这行代码必须在 canMove 的 if 里面，但在 吃子/移动 的逻辑最后
-			// 红方走完了，接下来交给 AI
-			isRedTurn = false; // 切换标志，禁止鼠标操作
-			draw(); // 必须先重绘，让玩家看到红方走的那一步
+			// 【关键修改】玩家走完了，交换回合给电脑
+			isRedTurn = !isRedTurn;
+			draw();
 
-			// 稍微停顿一下，假装电脑在思考 (也能让交互更自然)
-			Sleep(500); // 0.5秒
-
-			// 呼叫电脑走棋
+			// 呼叫电脑
+			Sleep(500);
 			computerMove();
-			// 注意：computerMove 里面会自动把 isRedTurn 改回 true
-
-			// 再次重绘，显示电脑走的结果
 			draw();
 		}
 	}
@@ -426,21 +431,32 @@ struct MoveStep {
 
 void ChessBoard::computerMove()
 {
-	// 1. 找出所有合法的走法
+	// 1. 动态决定电脑该动哪边的棋子
+	int startId = 0;
+	int endId = 0;
+
+	if (isRedTurn) {
+		// 轮到红方走（电脑执红）
+		startId = 0;
+		endId = 16; // 遍历 0-15
+	}
+	else {
+		// 轮到黑方走（电脑执黑）
+		startId = 16;
+		endId = 32; // 遍历 16-31
+	}
+
 	std::vector<MoveStep> moves;
 
-	// 遍历黑方所有棋子 (ID 16-31)
-	for (int i = 16; i < 32; i++) {
-		if (pieces[i].isDead()) continue; // 死的不能动
+	// 2. 遍历指定范围的棋子
+	for (int i = startId; i < endId; i++) {
+		if (pieces[i].isDead()) continue;
 
-		// 尝试走到棋盘的每一个格子 (0-9行, 0-8列)
 		for (int row = 0; row <= 9; row++) {
 			for (int col = 0; col <= 8; col++) {
-				int killId = getPieceAt(row, col); // 目标位置有没有子
+				int killId = getPieceAt(row, col);
 
-				// 问裁判：我也能走这里吗？
 				if (canMove(i, killId, row, col)) {
-					// 如果能走，计算一下这步棋的价值
 					MoveStep step;
 					step.moveId = i;
 					step.killId = killId;
@@ -448,32 +464,41 @@ void ChessBoard::computerMove()
 					step.col = col;
 					step.score = 0;
 
-					// --- 评分规则 (贪心算法) ---
+					// --- 评分规则 ---
 					if (killId != -1) {
-						// 只要能吃子，分就高！
-						// 还可以细化：吃车(ROOK)得100分，吃兵(SOLDIER)得10分...
-						// 这里简单处理：吃将最高，其他按类型给分
 						switch (pieces[killId].getType()) {
-						case KING: step.score = 10000; break; // 杀棋！
-						case ROOK: step.score = 50; break;
-						case HORSE: step.score = 30; break;
-						case CANNON: step.score = 30; break;
-						default: step.score = 10; break; // 吃兵、士、象
+						case KING: step.score += 10000; break;
+						case ROOK: step.score += 500; break;
+						case HORSE: step.score += 300; break;
+						case CANNON: step.score += 300; break;
+						case ADVISOR: step.score += 200; break;
+						case ELEPHANT: step.score += 200; break;
+						default: step.score += 100; break;
 						}
 					}
-					// 记录这步棋
+
+					// 位置分计算
+					if (pieces[i].getType() == SOLDIER) {
+						// 注意：SOLDIER_TABLE 是基于红方视角的
+						if (isRedTurn) {
+							// 电脑执红，直接查表
+							step.score += SOLDIER_TABLE[row][col];
+						}
+						else {
+							// 电脑执黑，倒过来查
+							step.score += SOLDIER_TABLE[9 - row][col];
+						}
+					}
 					moves.push_back(step);
 				}
 			}
 		}
 	}
 
-	// 2. 挑选最好的一步
-	if (moves.empty()) return; // 无路可走（其实应该判输，这里先不管）
+	if (moves.empty()) return; // 无路可走
 
-	// 找出分数最高的
+	// 3. 挑选分数最高的
 	int maxScore = -1;
-	// 可能会有多个分数一样的（比如好几个兵都能向前走），我们随机选一个，防止电脑太死板
 	std::vector<MoveStep> bestMoves;
 
 	for (const auto& step : moves) {
@@ -487,26 +512,25 @@ void ChessBoard::computerMove()
 		}
 	}
 
-	// 3. 随机选一个最好的
-	// 需要引入随机种子，不然每次走的一样。在 main 函数开头加 srand(time(0))
 	int index = rand() % bestMoves.size();
 	MoveStep best = bestMoves[index];
 
-	// 4. 执行这步棋
+	// 4. 执行走棋
 	if (best.killId != -1) {
-		// 如果吃到了老帅，游戏结束
 		if (pieces[best.killId].getType() == KING) {
 			pieces[best.killId].die();
 			pieces[best.moveId].setPosition(best.row, best.col);
 			draw();
-			MessageBox(GetHWnd(), _T("黑方获胜！电脑赢了！"), _T("GG"), MB_OK);
-			init(); // 重开
+			// 弹窗提示需要判断当前是谁赢了
+			if (isRedTurn) MessageBox(GetHWnd(), _T("红方(电脑)获胜！"), _T("GG"), MB_OK);
+			else MessageBox(GetHWnd(), _T("黑方(电脑)获胜！"), _T("GG"), MB_OK);
+			init();
 			return;
 		}
 		pieces[best.killId].die();
 	}
 	pieces[best.moveId].setPosition(best.row, best.col);
 
-	// 5. 走完这一步，换回红方
-	isRedTurn = true;
+	// 5. 【关键修改】走完后，把回合反转给对面（玩家）
+	isRedTurn = !isRedTurn;
 }

@@ -17,6 +17,8 @@ public:
 	void click(int x, int y);
 	// 电脑走棋逻辑
 	void computerMove();
+	// 记录玩家是哪一方
+	PieceColor playerColor;
 	// 裁判函数
 	// 参数：moveId(移动棋子的ID), row/col(目标位置), killId(目标位置的棋子ID, -1表示空地)
 	bool canMove(int moveId, int killId, int row, int col);
