@@ -36,5 +36,8 @@ private:
 	// -1 表示没选中任何棋子
 	// 0-31 表示选中了对应的棋子
 	int selectedId;
+	// 记录当前是谁的回合
+	// true 代表红方回合，false 代表黑方回合
+	bool isRedTurn;
 	int getStoneCount(int row1, int col1, int row2, int col2);
 };

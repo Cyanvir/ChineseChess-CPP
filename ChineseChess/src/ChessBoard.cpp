@@ -1,5 +1,6 @@
 #include "ChessBoard.h"
 #include <cmath>
+#include<graphics.h>
 ChessBoard::ChessBoard()
 {
 	selectedId = -1; // 一开始什么都没选中
@@ -8,6 +9,9 @@ ChessBoard::ChessBoard()
 // 初始化32个棋子
 void ChessBoard::init()
 {
+	// 红方先行
+	isRedTurn = true;
+	selectedId = -1; // 顺便确保重置选中状态
 	// 【核心修改】全部换成 TEAM_RED 和 TEAM_BLACK
 
 	// --- 红方 (0-15) ---
@@ -106,6 +110,31 @@ void ChessBoard::draw()
 		// 画个矩形框住棋子
 		rectangle(x - 30, y - 30, x + 30, y + 30);
 	}
+	// 提示当前回合
+	settextstyle(30, 0, _T("黑体"));
+	setbkmode(TRANSPARENT);
+
+	LPCTSTR tipText; // 定义一个字符串变量
+	if (isRedTurn) {
+		settextcolor(RED);
+		tipText = _T("轮到红方走棋");
+	}
+	else {
+		settextcolor(BLACK);
+		tipText = _T("轮到黑方走棋");
+	}
+
+	// 1. 自动居中计算
+	// 窗口宽度是 580 (main函数里设的)，也可以用 getwidth() 获取
+	int textWidth = textwidth(tipText);
+	int x = (580 - textWidth) / 2;
+
+	// 2. 位置下移，不挡住棋子
+	// 棋盘底部是 MARGIN_Y + 9 * GRID_SIZE
+	// 我们再往下多加 70 像素，给最下面的棋子留出位置
+	int y = MARGIN_Y + 9 * GRID_SIZE + 70;
+
+	outtextxy(x, y, tipText);
 }
 // 辅助函数：计算两个点之间（不包含起点和终点）有几个棋子？
 // 用于“车”和“炮”的判断
@@ -158,50 +187,76 @@ void ChessBoard::click(int x, int y)
 	// --- 状态机逻辑 ---
 
 	if (selectedId == -1) {
-		// 【情况A：当前没选中棋子】
+		// 【情况A：手里空空】
 		if (clickId != -1) {
-			// 如果点到了棋子，就选中它！
+			// 必须点“当前回合”颜色的棋子
+			// 如果是红方回合(true)，必须点 RED 颜色的棋子
+			// 如果是黑方回合(false)，必须点 BLACK 颜色的棋子
+			if (isRedTurn == true && pieces[clickId].getColor() != TEAM_RED) return;
+			if (isRedTurn == false && pieces[clickId].getColor() != TEAM_BLACK) return;
+
 			selectedId = clickId;
-			// 播放个音效或者打印个日志（这里先留空）
 		}
 	}
 	else {
 		// 【情况B：手里已经拿着一个棋子了】
-
-		// --- 1. 先判断是不是想“移动”或者“吃子” ---
-		// (Day 3 的裁判逻辑放在这里)
-		// 注意：如果只是点击自己取消，不需要经过裁判，所以裁判逻辑要稍微往后放一点，或者特判一下
-
-		if (clickId != -1) {
-			// 点了棋子
-
-			// 【新增逻辑】如果点的是自己 -> 取消选中
-			if (clickId == selectedId) {
-				selectedId = -1; // 放下棋子
-				return;          // 操作结束，直接返回
-			}
-
-			if (pieces[clickId].getColor() == pieces[selectedId].getColor()) {
-				// 点了其他队友 -> 换选
-				selectedId = clickId;
-				return; // 换完就走，不需要后续判断
-			}
-
-			// --- 下面是“吃子”逻辑 ---
-			// 只有吃子才需要问裁判
-			if (canMove(selectedId, clickId, row, col)) {
-				pieces[clickId].die();
-				pieces[selectedId].setPosition(row, col);
-				selectedId = -1;
-			}
+		// 1. 点自己 -> 取消选中
+		if (clickId == selectedId) {
+			selectedId = -1;
+			return;
 		}
-		else {
-			// --- 下面是“移动到空地”逻辑 ---
-			// 只有移动才需要问裁判
-			if (canMove(selectedId, clickId, row, col)) {
-				pieces[selectedId].setPosition(row, col);
-				selectedId = -1;
+
+		// 2. 点队友 -> 换选
+		if (clickId != -1 && pieces[clickId].getColor() == pieces[selectedId].getColor()) {
+			selectedId = clickId;
+			return;
+		}
+
+		// 3. 点敌人 或 点空地 -> 尝试移动
+		// 问裁判：能不能走？
+		if (canMove(selectedId, clickId, row, col)) {
+
+			// --- 执行逻辑 ---
+			if (clickId != -1) {
+				// 吃子逻辑
+				if (pieces[clickId].getType() == KING) {
+					// 如果吃的是老将，游戏结束
+					pieces[clickId].die();
+					pieces[selectedId].setPosition(row, col);
+					draw(); // 把这一步画出来
+					// 2. 准备弹窗内容
+					LPCTSTR msgContent;
+					if (isRedTurn) msgContent = _T("红方获胜！\n\n是否再来一局？");
+					else msgContent = _T("黑方获胜！\n\n是否再来一局？");
+					// 3. 弹出对话框 (MB_YESNO 会显示"是"和"否"两个按钮)
+					// ret 会接收用户的选择结果
+					int ret = MessageBox(GetHWnd(), msgContent, _T("游戏结束"), MB_YESNO | MB_ICONQUESTION);
+
+					// 4. 根据选择处理
+					if (ret == IDYES) {
+						// 用户点了“是” -> 重置游戏
+						init();
+						// selectedId = -1; // init()里已经重置了，这里不需要重复
+						// isRedTurn = true; // init()里也重置了
+					}
+					else {
+						// 用户点了“否” -> 退出程序
+						exit(0);
+					}
+					return; // 结束本次点击逻辑
+				}
+				pieces[clickId].die(); // 普通吃子
 			}
+
+			// 移动棋子 (不管是吃子还是走空地，自己都要过去)
+			pieces[selectedId].setPosition(row, col);
+
+			// 取消选中
+			selectedId = -1;
+
+			// 【核心修复】交换回合
+			// 这行代码必须在 canMove 的 if 里面，但在 吃子/移动 的逻辑最后
+			isRedTurn = !isRedTurn;
 		}
 	}
 }
