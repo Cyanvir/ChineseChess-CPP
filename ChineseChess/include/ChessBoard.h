@@ -19,6 +19,9 @@ public:
 	void computerMove();
 	// 记录玩家是哪一方
 	PieceColor playerColor;
+	// 统一处理游戏结束
+	// 参数：winner 是获胜的那一方
+	void gameOver(PieceColor winner);
 	// 裁判函数
 	// 参数：moveId(移动棋子的ID), row/col(目标位置), killId(目标位置的棋子ID, -1表示空地)
 	bool canMove(int moveId, int killId, int row, int col);

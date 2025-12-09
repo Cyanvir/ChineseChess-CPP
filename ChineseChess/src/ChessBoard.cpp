@@ -250,17 +250,17 @@ void ChessBoard::click(int x, int y)
 		// 问裁判：能不能走？
 		if (canMove(selectedId, clickId, row, col)) {
 			if (clickId != -1) {
+				// 吃子逻辑
 				if (pieces[clickId].getType() == KING) {
+					// 1. 先把老将吃了，画面更新
 					pieces[clickId].die();
 					pieces[selectedId].setPosition(row, col);
 					draw();
-					// 胜负判断
-					if (isRedTurn) MessageBox(GetHWnd(), _T("红方获胜！"), _T("恭喜"), MB_YESNO);
-					else MessageBox(GetHWnd(), _T("黑方获胜！"), _T("恭喜"), MB_YESNO);
 
-					// 这里为了简化，直接重开，你可以加 MB_YESNO 的判断逻辑
-					init();
-					return;
+					// 2. 【修改】直接调用统一接口
+					if (isRedTurn) gameOver(TEAM_RED);
+					else gameOver(TEAM_BLACK);
+					return; // 结束
 				}
 				pieces[clickId].die();
 			}
@@ -270,12 +270,16 @@ void ChessBoard::click(int x, int y)
 
 			// 【关键修改】玩家走完了，交换回合给电脑
 			isRedTurn = !isRedTurn;
-			draw();
+
+			draw();           // 在后台画图
+			FlushBatchDraw(); // 【新增】立刻把这一帧显示出来！让玩家看到自己走的棋
 
 			// 呼叫电脑
-			Sleep(500);
+			Sleep(500);       // 现在暂停，玩家就能盯着自己刚走的那步棋看了
 			computerMove();
-			draw();
+
+			draw();           // 电脑走完了，再画一次
+			FlushBatchDraw(); // 【新增】立刻显示电脑走的棋
 		}
 	}
 }
@@ -515,22 +519,49 @@ void ChessBoard::computerMove()
 	int index = rand() % bestMoves.size();
 	MoveStep best = bestMoves[index];
 
-	// 4. 执行走棋
+	// 4. 执行这步棋
 	if (best.killId != -1) {
 		if (pieces[best.killId].getType() == KING) {
+			// 吃老帅
 			pieces[best.killId].die();
 			pieces[best.moveId].setPosition(best.row, best.col);
-			draw();
-			// 弹窗提示需要判断当前是谁赢了
-			if (isRedTurn) MessageBox(GetHWnd(), _T("红方(电脑)获胜！"), _T("GG"), MB_OK);
-			else MessageBox(GetHWnd(), _T("黑方(电脑)获胜！"), _T("GG"), MB_OK);
-			init();
+			draw(); // 必须重绘，让玩家看到最后这一步
+			FlushBatchDraw(); // 记得这里也要刷新一下让玩家死个明白
+			// 电脑赢了（注意：进入这里说明是当前行动方赢了）
+			// 如果 isRedTurn 是 true，说明是红方(电脑)走的这一步赢了
+			if (isRedTurn) gameOver(TEAM_RED);
+			else gameOver(TEAM_BLACK);
+
 			return;
 		}
 		pieces[best.killId].die();
 	}
 	pieces[best.moveId].setPosition(best.row, best.col);
-
 	// 5. 【关键修改】走完后，把回合反转给对面（玩家）
 	isRedTurn = !isRedTurn;
+}
+// 统一的游戏结束处理函数
+void ChessBoard::gameOver(PieceColor winner)
+{
+	// 1. 构造提示语
+	LPCTSTR msgContent;
+	if (winner == TEAM_RED) {
+		msgContent = _T("红方获胜！\n\n是否再来一局？");
+	}
+	else {
+		msgContent = _T("黑方获胜！\n\n是否再来一局？");
+	}
+
+	// 2. 弹出选择框
+	int ret = MessageBox(GetHWnd(), msgContent, _T("游戏结束"), MB_YESNO | MB_ICONQUESTION);
+
+	// 3. 根据用户选择执行
+	if (ret == IDYES) {
+		// 选“是” -> 重开
+		init();
+	}
+	else {
+		// 选“否” -> 彻底退出程序
+		exit(0);
+	}
 }
