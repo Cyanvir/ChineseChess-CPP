@@ -1,5 +1,5 @@
 #include "ChessBoard.h"
-
+#include <cmath>
 ChessBoard::ChessBoard()
 {
 	selectedId = -1; // 一开始什么都没选中
@@ -107,6 +107,29 @@ void ChessBoard::draw()
 		rectangle(x - 30, y - 30, x + 30, y + 30);
 	}
 }
+// 辅助函数：计算两个点之间（不包含起点和终点）有几个棋子？
+// 用于“车”和“炮”的判断
+int ChessBoard::getStoneCount(int row1, int col1, int row2, int col2)
+{
+	int ret = 0;
+	// 情况1：在同一行
+	if (row1 == row2) {
+		int min = (col1 < col2) ? col1 : col2;
+		int max = (col1 < col2) ? col2 : col1;
+		for (int i = min + 1; i < max; i++) {
+			if (getPieceAt(row1, i) != -1) ret++; // 如果有子，计数+1
+		}
+	}
+	// 情况2：在同一列
+	else if (col1 == col2) {
+		int min = (row1 < row2) ? row1 : row2;
+		int max = (row1 < row2) ? row2 : row1;
+		for (int i = min + 1; i < max; i++) {
+			if (getPieceAt(i, col1) != -1) ret++;
+		}
+	}
+	return ret;
+}
 // 辅助功能：看看 row, col 这个格子里有没有活着的棋子
 int ChessBoard::getPieceAt(int row, int col)
 {
@@ -144,25 +167,182 @@ void ChessBoard::click(int x, int y)
 	}
 	else {
 		// 【情况B：手里已经拿着一个棋子了】
+
+		// --- 1. 先判断是不是想“移动”或者“吃子” ---
+		// (Day 3 的裁判逻辑放在这里)
+		// 注意：如果只是点击自己取消，不需要经过裁判，所以裁判逻辑要稍微往后放一点，或者特判一下
+
 		if (clickId != -1) {
-			// 如果又点了一个棋子
-			// 这里暂时简化处理：如果是队友就换人，如果是敌人就吃掉（今天先做换人）
-			if (pieces[clickId].getColor() == pieces[selectedId].getColor()) {
-				// 点了队友，换选这个队友
-				selectedId = clickId;
+			// 点了棋子
+
+			// 【新增逻辑】如果点的是自己 -> 取消选中
+			if (clickId == selectedId) {
+				selectedId = -1; // 放下棋子
+				return;          // 操作结束，直接返回
 			}
-			else {
-				// 点了敌人 -> 吃子！(先把敌人弄死，再走过去)
-				pieces[clickId].die(); // 敌人去世
-				pieces[selectedId].setPosition(row, col); // 我走过去
-				selectedId = -1; // 行动结束，取消选中
+
+			if (pieces[clickId].getColor() == pieces[selectedId].getColor()) {
+				// 点了其他队友 -> 换选
+				selectedId = clickId;
+				return; // 换完就走，不需要后续判断
+			}
+
+			// --- 下面是“吃子”逻辑 ---
+			// 只有吃子才需要问裁判
+			if (canMove(selectedId, clickId, row, col)) {
+				pieces[clickId].die();
+				pieces[selectedId].setPosition(row, col);
+				selectedId = -1;
 			}
 		}
 		else {
-			// 点了空地 -> 移动
-			// 暂时不判断规则，想去哪去哪（瞬移）
-			pieces[selectedId].setPosition(row, col);
-			selectedId = -1; // 移动完毕，取消选中
+			// --- 下面是“移动到空地”逻辑 ---
+			// 只有移动才需要问裁判
+			if (canMove(selectedId, clickId, row, col)) {
+				pieces[selectedId].setPosition(row, col);
+				selectedId = -1;
+			}
 		}
 	}
+}
+bool ChessBoard::canMove(int moveId, int killId, int row, int col)
+{
+	// 1. 如果目标位置有棋子，且是队友，绝对不能走（不能吃自己人）
+	if (killId != -1) {
+		if (pieces[moveId].getColor() == pieces[killId].getColor()) {
+			return false; // 队友，禁止误伤
+		}
+	}
+
+	// 获取当前棋子的信息
+	int row1 = pieces[moveId].getRow();
+	int col1 = pieces[moveId].getCol();
+	PieceType type = pieces[moveId].getType();
+	PieceColor color = pieces[moveId].getColor(); // 红/黑
+
+	// 2. 根据棋子类型，逐个判断
+	switch (type)
+	{
+	case ROOK: // 【车】：横冲直撞
+		// 必须在同一行 或 同一列
+		if (row1 != row && col1 != col) return false;
+		// 中间不能有障碍物
+		if (getStoneCount(row1, col1, row, col) > 0) return false;
+		break;
+
+	case HORSE: // 【马】：走日字，要注意“撇脚”
+	{
+		// 算出横向和纵向的距离
+		int dr = row - row1; // 纵向距离
+		int dc = col - col1; // 横向距离
+		int absDr = abs(dr);
+		int absDc = abs(dc);
+
+		// 必须是“日”字：一边走1格，一边走2格
+		if (!((absDr == 1 && absDc == 2) || (absDr == 2 && absDc == 1))) return false;
+
+		// --- 撇脚马判断 ---
+		if (absDc == 2) {
+			// 也就是横着走2格，那“马脚”就在横着走1格的位置
+			int legCol = (col + col1) / 2;
+			if (getPieceAt(row1, legCol) != -1) return false; // 绊马脚了
+		}
+		else {
+			// 竖着走2格，“马脚”在竖着走1格的位置
+			int legRow = (row + row1) / 2;
+			if (getPieceAt(legRow, col1) != -1) return false;
+		}
+		break;
+	}
+
+	case CANNON: // 【炮】：隔山打牛
+		if (row1 != row && col1 != col) return false; // 必须直线
+
+		if (killId == -1) {
+			// 如果是移动（不吃子）：中间必须没障碍
+			if (getStoneCount(row1, col1, row, col) > 0) return false;
+		}
+		else {
+			// 如果是吃子：中间必须正好有1个障碍（炮架子）
+			if (getStoneCount(row1, col1, row, col) != 1) return false;
+		}
+		break;
+
+	case ELEPHANT: // 【相/象】：走田字，不能过河
+		// 1. 必须走“田”：横纵距离都是2
+		if (abs(row - row1) != 2 || abs(col - col1) != 2) return false;
+
+		// 2. 堵象眼判断：田字中心不能有子
+		if (getPieceAt((row + row1) / 2, (col + col1) / 2) != -1) return false;
+
+		// 3. 不能过河
+		if (color == TEAM_RED) {
+			if (row < 5) return false; // 红相不能去上半区(0-4行)
+		}
+		else {
+			if (row > 4) return false; // 黑象不能去下半区(5-9行)
+		}
+		break;
+
+	case ADVISOR: // 【仕/士】：走斜线，不出九宫格
+		// 1. 必须走斜线（横纵各动1格）
+		if (abs(row - row1) != 1 || abs(col - col1) != 1) return false;
+
+		// 2. 不能出九宫格
+		if (col < 3 || col > 5) return false; // 左右边界
+		if (color == TEAM_RED) {
+			if (row < 7) return false; // 红仕只能在下三路
+		}
+		else {
+			if (row > 2) return false; // 黑士只能在上三路
+		}
+		break;
+
+	case KING: // 【帅/将】：走直线，不出九宫格，王不见王
+		// 1. 走直线，每次1格
+		if ((abs(row - row1) + abs(col - col1)) != 1) return false;
+
+		// 2. 不能出九宫格
+		if (col < 3 || col > 5) return false;
+		if (color == TEAM_RED) {
+			if (row < 7) return false;
+		}
+		else {
+			if (row > 2) return false;
+		}
+		// TODO: 王不见王的规则比较复杂，先不做，如果你想拿满分可以后面补
+		break;
+
+	case SOLDIER: // 【兵/卒】：过河前只能冲，过河后能横着走，决不能回头
+		// 1. 纵向距离：红兵只能向上(-1)，黑卒只能向下(+1)
+		int dr = row - row1;
+		int dc = col - col1;
+
+		if (color == TEAM_RED) {
+			// 红兵：没过河(row1 > 4)只能向前；过河后可以向前或左右
+			if (row1 > 4) {
+				// 没过河：只能向前1格，横向不能动
+				if (dr != -1 || dc != 0) return false;
+			}
+			else {
+				// 过河了：向前1格 或者 横向1格
+				// 逻辑：总步数必须是1，且不能后退(dr不能是正数)
+				if (abs(dr) + abs(dc) != 1) return false;
+				if (dr > 0) return false; // 绝不回头
+			}
+		}
+		else {
+			// 黑卒逻辑相反
+			if (row1 <= 4) {
+				if (dr != 1 || dc != 0) return false;
+			}
+			else {
+				if (abs(dr) + abs(dc) != 1) return false;
+				if (dr < 0) return false;
+			}
+		}
+		break;
+	}
+
+	return true; // 如果上面都没拦住，那就是合法移动
 }

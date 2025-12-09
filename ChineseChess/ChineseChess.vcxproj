@@ -19,13 +19,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\ChessBoard.h" />
-    <ClInclude Include="src\ChessPiece.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="src\ChessBoard.cpp" />
     <ClCompile Include="src\ChessPiece.cpp" />
     <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\ChessBoard.h" />
+    <ClInclude Include="include\ChessPiece.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>

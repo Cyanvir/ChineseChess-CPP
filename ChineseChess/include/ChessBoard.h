@@ -14,6 +14,9 @@ public:
 	void draw();
 	// 处理鼠标点击：传入鼠标的像素坐标(x,y)
 	void click(int x, int y);
+	// 裁判函数
+	// 参数：moveId(移动棋子的ID), row/col(目标位置), killId(目标位置的棋子ID, -1表示空地)
+	bool canMove(int moveId, int killId, int row, int col);
 	// 提供给外部的接口
 	int getGridSize() const { return GRID_SIZE; }
 	int getMarginX() const { return MARGIN_X; }
@@ -33,4 +36,5 @@ private:
 	// -1 表示没选中任何棋子
 	// 0-31 表示选中了对应的棋子
 	int selectedId;
+	int getStoneCount(int row1, int col1, int row2, int col2);
 };
